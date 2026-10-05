@@ -1,0 +1,37 @@
+services:
+  db:
+    image: mariadb:11
+    environment:
+      MARIADB_DATABASE: media_api
+      MARIADB_USER: media
+      MARIADB_PASSWORD: media
+      MARIADB_ROOT_PASSWORD: root
+    ports:
+      - "3307:3306"
+    volumes:
+      - dbdata:/var/lib/mysql
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      DB_USER: media
+      DB_PASSWORD: media
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_NAME: media_api
+      JWT_SECRET: JWT_SECRET_JWT_SECRET
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  dbdata:

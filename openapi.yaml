@@ -1,0 +1,361 @@
+openapi: 3.0.3
+info:
+  title: week-6-go-media-api
+  version: 1.0.0
+  description: |
+    A small movie catalog API.
+    Listing and reading movies is public.
+    Creating, updating, and deleting a movie requires a Bearer token.
+    A user can change only the movies they created.
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: Auth
+  - name: Movies
+paths:
+  /:
+    get:
+      summary: API info
+      responses:
+        "200":
+          description: Service name and documentation link
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  docs:
+                    type: string
+  /api/health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: Database is reachable
+        "503":
+          description: Database is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/register:
+    post:
+      tags: [Auth]
+      summary: Create a user and return a token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Credentials"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Username is already taken
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/login:
+    post:
+      tags: [Auth]
+      summary: Log in and return a token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Credentials"
+      responses:
+        "200":
+          description: Login succeeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid username or password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/movies:
+    get:
+      tags: [Movies]
+      summary: List movies
+      description: Supports filtering, sorting, and pagination.
+      parameters:
+        - in: query
+          name: genre
+          schema:
+            type: string
+            enum: [Action, Comedy, Drama, Horror, Sci-Fi, Documentary]
+        - in: query
+          name: year
+          schema:
+            type: integer
+        - in: query
+          name: director
+          schema:
+            type: string
+          description: Case-insensitive partial match.
+        - in: query
+          name: sort
+          schema:
+            type: string
+            enum: [title, year, rating, created]
+            default: created
+        - in: query
+          name: order
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        "200":
+          description: A page of movies
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovieList"
+        "400":
+          description: Invalid query
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      tags: [Movies]
+      summary: Create a movie
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MovieInput"
+      responses:
+        "201":
+          description: Movie created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Movie"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/movies/{id}:
+    get:
+      tags: [Movies]
+      summary: Get one movie
+      parameters:
+        - $ref: "#/components/parameters/MovieId"
+      responses:
+        "200":
+          description: The movie
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Movie"
+        "404":
+          description: Movie not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    put:
+      tags: [Movies]
+      summary: Replace a movie
+      description: The whole movie is replaced. Only the owner can do this.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/MovieId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MovieInput"
+      responses:
+        "200":
+          description: Updated movie
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Movie"
+        "401":
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: The movie belongs to another user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Movie not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      tags: [Movies]
+      summary: Delete a movie
+      description: Only the owner can delete the movie.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/MovieId"
+      responses:
+        "204":
+          description: Movie deleted
+        "401":
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: The movie belongs to another user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Movie not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    MovieId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+    Credentials:
+      type: object
+      properties:
+        username:
+          type: string
+          example: alice
+        password:
+          type: string
+          example: secret123
+      required: [username, password]
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+    MovieInput:
+      type: object
+      properties:
+        title:
+          type: string
+          example: Alien
+        director:
+          type: string
+          example: Ridley Scott
+        genre:
+          type: string
+          enum: [Action, Comedy, Drama, Horror, Sci-Fi, Documentary]
+        year:
+          type: integer
+          example: 1979
+        rating:
+          type: number
+          minimum: 0
+          maximum: 10
+          example: 8.5
+        description:
+          type: string
+      required: [title, director, genre, year, rating, description]
+    Movie:
+      allOf:
+        - $ref: "#/components/schemas/MovieInput"
+        - type: object
+          properties:
+            id:
+              type: integer
+            owner_id:
+              type: integer
+            created_at:
+              type: string
+              format: date-time
+    MovieList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Movie"
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
